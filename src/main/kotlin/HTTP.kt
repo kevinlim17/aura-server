@@ -18,4 +18,9 @@ import org.jetbrains.exposed.sql.*
 
 fun Application.configureHTTP() {
     install(Compression)
+
+    // Install ContentNegotiation for JSON serialization
+    install(ContentNegotiation) {
+        json()
+    }
 }

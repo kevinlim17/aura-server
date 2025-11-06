@@ -4,7 +4,7 @@ plugins {
     alias(libs.plugins.kotlin.plugin.serialization)
 }
 
-group = "com.kevin"
+group = "com.kevin.aura-server"
 version = "0.0.1"
 
 application {
@@ -26,6 +26,7 @@ dependencies {
     implementation(libs.postgresql)
     implementation(libs.dotenv.kotlin)
     implementation(libs.ktor.server.auth.jwt)
+    implementation(libs.bcrypt)
     implementation(libs.ktor.server.netty)
     implementation(libs.logback.classic)
     implementation(libs.ktor.server.config.yaml)

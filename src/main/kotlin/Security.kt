@@ -2,50 +2,69 @@ package com.kevin
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
-import com.kborowy.authprovider.firebase.firebase
+import io.github.cdimascio.dotenv.dotenv
 import io.ktor.http.*
-import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
-import io.ktor.server.plugins.compression.*
-import io.ktor.server.plugins.contentnegotiation.*
-import io.ktor.server.request.*
 import io.ktor.server.response.*
-import io.ktor.server.routing.*
-import java.io.File
-import org.jetbrains.exposed.sql.*
 
+/**
+ * Configure JWT authentication for the application
+ */
 fun Application.configureSecurity() {
-    /**
-    install(Authentication) {
-        firebase {
-            adminFile = File("path/to/admin/file.json")
-            realm = "My Server"
-            validate { token ->
-                MyAuthenticatedUser(id = token.uid)
-            }
-        }
+    // Load environment variables
+    val dotenv = dotenv {
+        ignoreIfMissing = true
     }
-    */
-    // Please read the jwt property from the config file if you are using EngineMain
-    val jwtAudience = "jwt-audience"
-    val jwtDomain = "https://jwt-provider-domain/"
-    val jwtRealm = "ktor sample app"
-    val jwtSecret = "secret"
-    authentication {
-        jwt {
+
+    // JWT Configuration from environment or defaults
+    val jwtSecret = dotenv["JWT_SECRET"] ?: "aura-secret-key-change-in-production"
+    val jwtIssuer = dotenv["JWT_ISSUER"] ?: "aura-server"
+    val jwtAudience = dotenv["JWT_AUDIENCE"] ?: "aura-client"
+    val jwtRealm = dotenv["JWT_REALM"] ?: "Aura API"
+
+    log.info("========================================")
+    log.info("Configuring JWT Authentication...")
+    log.info("JWT Issuer: $jwtIssuer")
+    log.info("JWT Audience: $jwtAudience")
+    log.info("JWT Realm: $jwtRealm")
+    log.info("========================================")
+
+    install(Authentication) {
+        jwt("auth-jwt") {
             realm = jwtRealm
+
             verifier(
-                JWT
-                    .require(Algorithm.HMAC256(jwtSecret))
+                JWT.require(Algorithm.HMAC256(jwtSecret))
+                    .withIssuer(jwtIssuer)
                     .withAudience(jwtAudience)
-                    .withIssuer(jwtDomain)
                     .build()
             )
+
             validate { credential ->
-                if (credential.payload.audience.contains(jwtAudience)) JWTPrincipal(credential.payload) else null
+                // Validate the JWT token
+                if (credential.payload.getClaim("userId").asInt() != null) {
+                    JWTPrincipal(credential.payload)
+                } else {
+                    null
+                }
+            }
+
+            challenge { defaultScheme, realm ->
+                call.respond(
+                    HttpStatusCode.Unauthorized,
+                    mapOf(
+                        "success" to false,
+                        "error" to mapOf(
+                            "code" to "UNAUTHORIZED",
+                            "message" to "Token is not valid or has expired"
+                        )
+                    )
+                )
             }
         }
     }
+
+    log.info("JWT Authentication configured successfully")
 }
