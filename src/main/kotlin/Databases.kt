@@ -1,61 +1,117 @@
 package com.kevin
 
-import com.auth0.jwt.JWT
-import com.auth0.jwt.algorithms.Algorithm
-import com.kborowy.authprovider.firebase.firebase
+import com.kevin.db.DatabaseConfig
+import com.kevin.db.DatabaseInitializer
 import io.ktor.http.*
-import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
-import io.ktor.server.auth.*
-import io.ktor.server.auth.jwt.*
-import io.ktor.server.plugins.compression.*
-import io.ktor.server.plugins.contentnegotiation.*
-import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import java.io.File
-import org.jetbrains.exposed.sql.*
 
+/**
+ * Configure database connection and initialization
+ * Uses complete 14-table schema from src/main/kotlin/database/
+ */
 fun Application.configureDatabases() {
-    val database = Database.connect(
-        url = "jdbc:h2:mem:test;DB_CLOSE_DELAY=-1",
-        user = "root",
-        driver = "org.h2.Driver",
-        password = "",
-    )
-    val userService = UserService(database)
+    log.info("========================================")
+    log.info("Starting database configuration...")
+    log.info("========================================")
+    log.info("Database URL: ${DatabaseConfig.dbUrl}")
+    log.info("Database User: ${DatabaseConfig.dbUser}")
+    log.info("Database Driver: ${DatabaseConfig.dbDriver}")
+
+    // Connect to PostgresSQL database
+    val database = try {
+        DatabaseConfig.connect()
+    } catch (e: Exception) {
+        log.error("❌ Failed to connect to database", e)
+        throw e
+    }
+
+    log.info("✓ Database connected successfully")
+
+    // Initialize database tables on startup
+    log.info("Initializing database schema with 14 tables...")
+    try {
+        DatabaseInitializer.initializeTables(database)
+        log.info("✓ Database schema initialized successfully")
+        log.info("  • Users table")
+        log.info("  • UserProfiles table")
+        log.info("  • UserContexts table")
+        log.info("  • UserPreferences table")
+        log.info("  • Artworks table")
+        log.info("  • ArtworkSearches table")
+        log.info("  • DocentSessions table")
+        log.info("  • DocentFeedbacks table")
+        log.info("  • UserLinks table")
+        log.info("  • UserMemos table")
+        log.info("  • VoiceRecordings table")
+        log.info("  • FewShotExamples table")
+        log.info("  • UserCompanions table")
+        log.info("  • SchemaMigrations table")
+    } catch (e: Exception) {
+        log.error("❌ Failed to initialize database schema", e)
+        throw e
+    }
+
+    // Optional: Seed sample data for development
+    // Uncomment to populate with test data
+    /*
+    if (environment.developmentMode) {
+        log.info("Seeding sample data for development...")
+        try {
+            DatabaseInitializer.seedSampleData(database)
+            DatabaseInitializer.seedArtworks(database)
+            log.info("✓ Sample data seeded successfully")
+        } catch (e: Exception) {
+            log.error("Failed to seed sample data", e)
+        }
+    }
+    */
+
+    log.info("========================================")
+    log.info("Database configuration completed!")
+    log.info("========================================")
+
+    // Add database-related routes
     routing {
-        // Create user
-        post("/users") {
-            val user = call.receive<ExposedUser>()
-            val id = userService.create(user)
-            call.respond(HttpStatusCode.Created, id)
+        // Health check endpoint
+        get("/health") {
+            call.respond(HttpStatusCode.OK, mapOf<String, Any>(
+                "status" to "healthy",
+                "database" to "connected",
+                // "timestamp" to System.currentTimeMillis()
+            ))
         }
-        
-        // Read user
-        get("/users/{id}") {
-            val id = call.parameters["id"]?.toInt() ?: throw IllegalArgumentException("Invalid ID")
-            val user = userService.read(id)
-            if (user != null) {
-                call.respond(HttpStatusCode.OK, user)
-            } else {
-                call.respond(HttpStatusCode.NotFound)
-            }
+
+        // Database info endpoint
+        get("/db-info") {
+            call.respond(HttpStatusCode.OK, DatabaseConfig.getConnectionInfo())
         }
-        
-        // Update user
-        put("/users/{id}") {
-            val id = call.parameters["id"]?.toInt() ?: throw IllegalArgumentException("Invalid ID")
-            val user = call.receive<ExposedUser>()
-            userService.update(id, user)
-            call.respond(HttpStatusCode.OK)
-        }
-        
-        // Delete user
-        delete("/users/{id}") {
-            val id = call.parameters["id"]?.toInt() ?: throw IllegalArgumentException("Invalid ID")
-            userService.delete(id)
-            call.respond(HttpStatusCode.OK)
+
+        // Database statistics endpoint
+        get("/db-stats") {
+            call.respond(HttpStatusCode.OK, mapOf<String, Any>(
+                "tables" to listOf(
+                    "users",
+                    "user_profiles",
+                    "user_contexts",
+                    "user_preferences",
+                    "artworks",
+                    "artwork_searches",
+                    "docent_sessions",
+                    "docent_feedbacks",
+                    "user_links",
+                    "user_memos",
+                    "voice_recordings",
+                    "few_shot_examples",
+                    "user_companions",
+                    "schema_migrations"
+                ),
+                /**
+                "status" to "initialized",
+                "total_tables" to 14
+                */
+            ))
         }
     }
 }
