@@ -111,7 +111,7 @@ object UserPreferences : IntIdTable("user_preferences") {
     // TTS settings
     val ttsSpeed = decimal("tts_speed", 3, 1).default(1.0.toBigDecimal())
     val ttsPitch = decimal("tts_pitch", 3, 1).default(1.0.toBigDecimal())
-    val ttsVoice = varchar("tts_voice", 50).default("default")
+    val ttsVoice = varchar("tts_voice", 50).default("NEUTRAL")
 
     // Language setting
     val preferredLanguage = varchar("preferred_language", 10).default("ko-KR")
