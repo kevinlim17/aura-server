@@ -4,7 +4,7 @@ import at.favre.lib.crypto.bcrypt.BCrypt
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.kevin.model.dto.*
-import com.kevin.models.User
+import com.kevin.model.User
 import com.kevin.repository.UserRepository
 import io.github.cdimascio.dotenv.dotenv
 import kotlinx.datetime.*
@@ -60,7 +60,7 @@ class AuthService(private val userRepository: UserRepository = UserRepository())
             )
         }
 
-        // Check if user already exists
+        // Check if the user already exists
         if (userRepository.existsByEmail(request.email)) {
             return ApiResponse(
                 success = false,

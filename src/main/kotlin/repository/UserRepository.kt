@@ -2,7 +2,7 @@ package com.kevin.repository
 
 import com.kevin.db.Users
 import com.kevin.model.dto.RegisterRequest
-import com.kevin.models.User
+import com.kevin.model.User
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
