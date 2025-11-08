@@ -8,7 +8,7 @@ import org.jetbrains.exposed.sql.kotlin.datetime.timestamp
  * Complete Aura Database Schema - 14 Tables
  * Based on: project_schema/aura_schema.sql
  *
- * Note: JSONB fields are stored as TEXT and should be serialized/deserialized in application layer
+ * Note: JSONB fields use custom PostgreSQL JSONB type (defined in CustomColumnTypes.kt)
  */
 
 // ============================================================================
@@ -41,8 +41,8 @@ object Users : IntIdTable("users") {
 object UserProfiles : IntIdTable("user_profiles") {
     val userId = reference("user_id", Users).uniqueIndex()
 
-    // Interests (JSON array - stored as TEXT, serialize/deserialize in app)
-    val interests = text("interests").default("[]")
+    // Interests (JSON array - stored as JSONB)
+    val interests = jsonb("interests")
 
     // Hobbies
     val hobbies = text("hobbies").nullable()
@@ -224,8 +224,8 @@ object DocentSessions : IntIdTable("docent_sessions") {
     val promptContext = text("prompt_context").nullable()
     val promptForm = text("prompt_form").nullable()
 
-    // Few-shot examples (JSON - stored as TEXT)
-    val fewShotExamples = text("few_shot_examples").default("[]")
+    // Few-shot examples (JSON - stored as JSONB)
+    val fewShotExamples = jsonb("few_shot_examples")
 
     // Generated docent text
     val generatedText = text("generated_text")
