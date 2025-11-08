@@ -1,6 +1,7 @@
 package com.kevin.repository
 
 import com.kevin.db.UserPreferences
+import com.kevin.db.Users
 import com.kevin.model.dto.*
 import kotlinx.datetime.Clock
 import org.jetbrains.exposed.sql.*
@@ -51,7 +52,13 @@ class UserPreferencesRepository {
      */
     fun findPreferencesByUserId(userId: Int): UserPreferencesResponse? {
         return transaction {
-            UserPreferences.selectAll()
+            UserPreferences.join(
+                Users,
+                JoinType.INNER,
+                UserPreferences.userId,
+                Users.id
+            )
+                .selectAll()
                 .where { UserPreferences.userId eq userId }
                 .map { rowToUserPreferences(it) }
                 .singleOrNull()
@@ -63,7 +70,13 @@ class UserPreferencesRepository {
      */
     fun findPreferencesById(preferencesId: Int): UserPreferencesResponse? {
         return transaction {
-            UserPreferences.selectAll()
+            UserPreferences.join(
+                Users,
+                JoinType.INNER,
+                UserPreferences.userId,
+                Users.id
+            )
+                .selectAll()
                 .where { UserPreferences.id eq preferencesId }
                 .map { rowToUserPreferences(it) }
                 .singleOrNull()
@@ -150,6 +163,7 @@ class UserPreferencesRepository {
             enableAudioDescriptions = row[UserPreferences.enableAudioDescriptions],
             highContrastMode = row[UserPreferences.highContrastMode],
             enablePushNotifications = row[UserPreferences.enablePushNotifications],
+            isVisuallyImpaired = row.getOrNull(Users.isVisuallyImpaired) ?: false,
             createdAt = row[UserPreferences.createdAt].toString(),
             updatedAt = row[UserPreferences.updatedAt].toString()
         )

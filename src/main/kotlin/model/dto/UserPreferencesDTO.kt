@@ -69,6 +69,7 @@ data class UserPreferencesResponse(
     val enableAudioDescriptions: Boolean,
     val highContrastMode: Boolean,
     val enablePushNotifications: Boolean,
+    val isVisuallyImpaired: Boolean = false, // From Users table
     val createdAt: String,
     val updatedAt: String
 )
