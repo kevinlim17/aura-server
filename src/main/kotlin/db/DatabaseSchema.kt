@@ -272,8 +272,8 @@ object DocentFeedbacks : IntIdTable("docent_feedbacks") {
     // Text feedback
     val comment = text("comment").nullable()
 
-    // Improvement suggestions (JSON - stored as TEXT)
-    val improvementSuggestions = text("improvement_suggestions").default("{}")
+    // Improvement Suggestions (JSON array - stored as JSONB)
+    val improvementSuggestions = jsonb("improvement_suggestions")
 
     // Few-shot learning candidate
     val isFewShotCandidate = bool("is_few_shot_candidate").default(false)
@@ -301,8 +301,8 @@ object UserLinks : IntIdTable("user_links") {
     // Link type
     val linkType = varchar("link_type", 50).nullable()
 
-    // Metadata (JSON - stored as TEXT)
-    val metadata = text("metadata").default("{}")
+    // Interests (JSON array - stored as JSONB)
+    val metadata = jsonb("metadata")
 
     // Thumbnail
     val thumbnailUrl = text("thumbnail_url").nullable()
