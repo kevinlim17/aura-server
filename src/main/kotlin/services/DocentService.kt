@@ -15,16 +15,21 @@ import java.util.concurrent.ConcurrentHashMap
  * Process:
  * 1. Load user context and preferences
  * 2. Include companion input (optional)
- * 3. Use few-shot examples (optional)
- * 4. Generate docent text using Gemini API
+ * 3. Select optimal few-shot examples using intelligent scoring (NEW)
+ * 4. Generate docent text using Gemini API with few-shot learning
  * 5. Generate TTS audio
  * 6. Save and return result
+ * 7. Track few-shot usage in Redis (NEW)
  */
 class DocentService(
     private val docentSessionRepository: DocentSessionRepository = DocentSessionRepository(),
     private val artworkRepository: ArtworkRepository = ArtworkRepository(),
     private val userPreferencesRepository: UserPreferencesRepository = UserPreferencesRepository(),
     private val userContextRepository: UserContextRepository = UserContextRepository(),
+    private val linkRepository: LinkRepository = LinkRepository(),
+    private val memoRepository: MemoRepository = MemoRepository(),
+    private val fewShotSelectorService: FewShotSelectorService = FewShotSelectorService(),
+    private val redisFewShotCacheService: RedisFewShotCacheService = RedisFewShotCacheService(),
     private val geminiService: GeminiService = GeminiService(),
     private val ttsService: TTSService = TTSService()
 ) {
@@ -110,18 +115,57 @@ class DocentService(
                 emptyList()
             }
 
-            updateProgress(sessionId, 40, "Loading few-shot examples...")
+            updateProgress(sessionId, 35, "Loading user resources...")
 
-            // 5. Load few-shot examples (if requested)
-            val fewShotExamples = if (request.useFewShotExamples) {
-                docentSessionRepository.getFewShotExamples(request.artworkId, limit = 3)
+            // 5. Load user links and memos related to the artwork
+            val userLinks = try {
+                val (links, _) = linkRepository.findLinksByUserId(
+                    userId = request.userId,
+                    page = 1,
+                    limit = 50,
+                    artworkId = request.artworkId  // Filter by artwork directly
+                )
+                links
+            } catch (e: Exception) {
+                println("⚠ Failed to load links: ${e.message}")
+                emptyList<LinkResponse>()
+            }
+
+            val userMemos = try {
+                val (memos, _) = memoRepository.findMemosByUserId(
+                    userId = request.userId,
+                    page = 1,
+                    limit = 50,
+                    artworkId = request.artworkId  // Filter by artwork directly
+                )
+                memos
+            } catch (e: Exception) {
+                println("⚠ Failed to load memos: ${e.message}")
+                emptyList<MemoResponse>()
+            }
+
+            updateProgress(sessionId, 40, "Selecting optimal few-shot examples...")
+
+            // 6. Select optimal few-shot examples using intelligent scoring (NEW)
+            val enrichedFewShots = if (request.useFewShotExamples) {
+                try {
+                    println("→ Selecting Few-Shot examples for user ${request.userId}, artwork ${request.artworkId}")
+                    fewShotSelectorService.selectOptimalFewShots(request, request.userId)
+                } catch (e: Exception) {
+                    println("⚠ Failed to select Few-Shot examples: ${e.message}")
+                    e.printStackTrace()
+                    emptyList()
+                }
             } else {
+                println("→ Few-Shot learning disabled for this request")
                 emptyList()
             }
 
+            println("✓ Selected ${enrichedFewShots.size} Few-Shot examples")
+
             updateProgress(sessionId, 50, "Building prompt...")
 
-            // 6. Build prompt
+            // 7. Build prompt with enriched few-shot examples (NEW)
             val narrativeStyle = request.narrativeStyle ?: userPreferences.narrativeStyle
             val preferredLength = request.preferredLength ?: userPreferences.preferredLength
 
@@ -130,14 +174,31 @@ class DocentService(
                 preferredLength = preferredLength
             )
 
-            val promptComponents = PromptBuilder.buildDocentPrompt(
-                artwork = artwork,
-                userPreferences = adjustedPreferences,
-                userContexts = userContexts,
-                companionContexts = companionContexts,
-                fewShotExamples = fewShotExamples,
-                customPrompt = request.customPrompt
-            )
+            val promptComponents = if (enrichedFewShots.isNotEmpty()) {
+                // Use enriched prompt builder with full few-shot context
+                println("→ Building prompt with ${enrichedFewShots.size} enriched few-shots")
+                PromptBuilder.buildDocentPromptWithEnrichedFewShots(
+                    artwork = artwork,
+                    userPreferences = adjustedPreferences,
+                    userContexts = userContexts,
+                    userLinks = userLinks,
+                    userMemos = userMemos,
+                    companionContexts = companionContexts,
+                    enrichedFewShots = enrichedFewShots,
+                    customPrompt = request.customPrompt
+                )
+            } else {
+                // Use standard prompt builder (backward compatibility)
+                println("→ Building standard prompt without few-shots")
+                PromptBuilder.buildDocentPrompt(
+                    artwork = artwork,
+                    userPreferences = adjustedPreferences,
+                    userContexts = userContexts,
+                    companionContexts = companionContexts,
+                    fewShotExamples = emptyList(),
+                    customPrompt = request.customPrompt
+                )
+            }
 
             updateProgress(sessionId, 60, "Generating docent text...")
 
@@ -181,7 +242,15 @@ class DocentService(
 
             updateProgress(sessionId, 90, "Saving results...")
 
-            // 9. Update session with results
+            // 9. Update session with results (store few-shot IDs only)
+            val fewShotExampleIds = enrichedFewShots.map {
+                FewShotExample(
+                    userContextSummary = it.example.userContextSummary,
+                    exemplarText = it.example.exemplarText,
+                    qualityScore = it.example.qualityScore
+                )
+            }
+
             val updatedSession = docentSessionRepository.createSession(
                 userId = request.userId,
                 artworkId = request.artworkId,
@@ -190,7 +259,7 @@ class DocentService(
                 promptTask = promptComponents.task,
                 promptContext = promptComponents.context,
                 promptForm = promptComponents.form,
-                fewShotExamples = fewShotExamples,
+                fewShotExamples = fewShotExampleIds,
                 generatedText = geminiResult.generatedText,
                 geminiModel = geminiResult.model,
                 geminiTemperature = geminiResult.temperature,
@@ -211,6 +280,20 @@ class DocentService(
 
             // Increment artwork's docent generation count
             docentSessionRepository.incrementArtworkDocentCount(request.artworkId)
+
+            // 10. Track few-shot usage in Redis (async) (NEW)
+            if (enrichedFewShots.isNotEmpty()) {
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        enrichedFewShots.forEach { enriched ->
+                            redisFewShotCacheService.incrementFewShotUsage(enriched.example.id)
+                        }
+                        println("✓ Updated usage stats for ${enrichedFewShots.size} few-shot examples in Redis")
+                    } catch (e: Exception) {
+                        println("⚠ Failed to update Redis usage stats: ${e.message}")
+                    }
+                }
+            }
 
             updateProgress(sessionId, 100, "Completed")
 
