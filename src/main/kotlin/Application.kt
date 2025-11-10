@@ -7,9 +7,9 @@ fun main(args: Array<String>) {
 }
 
 fun Application.module() {
+    configureDatabases()  // Initialize database first
     configureHTTP()
-    // configureSecurity()
+    configureSecurity()   // Configure JWT authentication
     configureSerialization()
-    configureDatabases()
     configureRouting()
 }
