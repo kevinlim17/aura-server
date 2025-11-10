@@ -16,3 +16,20 @@ jwt:
   domain: "https://jwt-provider-domain/"
   audience: "jwt-audience"
   realm: "ktor sample app"
+
+redis:
+  url: ${?REDIS}
+  # Connection pool settings
+  pool:
+    maxTotal: 8
+    maxIdle: 8
+    minIdle: 0
+  # Timeouts (in milliseconds)
+  timeout:
+    connect: 2000
+    command: 5000
+  # Cache TTL settings (in seconds)
+  cache:
+    defaultTTL: 3600        # 1 hour
+    qualityIndexTTL: 86400  # 24 hours
+    detailTTL: 7200         # 2 hours

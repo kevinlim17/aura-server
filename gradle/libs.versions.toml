@@ -7,6 +7,8 @@ logback = "1.5.13"
 postgresql = "42.7.7"
 dotenv = "6.4.1"
 bcrypt = "0.10.2"
+lettuce = "6.3.0.RELEASE"
+kotlinx-serialization = "1.6.2"
 
 [libraries]
 ktor-server-compression = { module = "io.ktor:ktor-server-compression", version.ref = "ktor" }
@@ -32,6 +34,8 @@ bcrypt = { module = "at.favre.lib:bcrypt", version.ref = "bcrypt" }
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
 ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
+lettuce-core = { module = "io.lettuce:lettuce-core", version.ref = "lettuce" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
