@@ -48,7 +48,9 @@ class CompanionRepository {
      */
     fun findCompanionById(companionId: Int): CompanionResponse? {
         return transaction {
-            (UserCompanions innerJoin Users)
+            // Use explicit join to avoid ambiguity with multiple foreign keys
+            UserCompanions
+                .join(Users, JoinType.INNER, onColumn = UserCompanions.companionUserId, otherColumn = Users.id)
                 .select(
                     UserCompanions.id,
                     UserCompanions.mainUserId,
@@ -63,7 +65,7 @@ class CompanionRepository {
                     Users.email,
                     Users.userType
                 )
-                .where { (UserCompanions.id eq companionId) and (Users.id eq UserCompanions.companionUserId) }
+                .where { UserCompanions.id eq companionId }
                 .map { rowToCompanion(it) }
                 .singleOrNull()
         }
@@ -79,8 +81,9 @@ class CompanionRepository {
         status: String? = null
     ): Pair<List<CompanionResponse>, Long> {
         return transaction {
-            // Build query with filters
-            var query = (UserCompanions innerJoin Users)
+            // Build query with filters - use explicit join to avoid ambiguity
+            var query = UserCompanions
+                .join(Users, JoinType.INNER, onColumn = UserCompanions.companionUserId, otherColumn = Users.id)
                 .select(
                     UserCompanions.id,
                     UserCompanions.mainUserId,
@@ -95,7 +98,7 @@ class CompanionRepository {
                     Users.email,
                     Users.userType
                 )
-                .where { (UserCompanions.mainUserId eq mainUserId) and (Users.id eq UserCompanions.companionUserId) }
+                .where { UserCompanions.mainUserId eq mainUserId }
 
             // Apply status filter if provided
             if (status != null) {
@@ -123,7 +126,9 @@ class CompanionRepository {
      */
     fun findPendingInvitationsByCompanionUserId(companionUserId: Int): List<InvitationResponse> {
         return transaction {
-            (UserCompanions innerJoin Users)
+            // Use explicit join with mainUserId to get main user's email
+            UserCompanions
+                .join(Users, JoinType.INNER, onColumn = UserCompanions.mainUserId, otherColumn = Users.id)
                 .select(
                     UserCompanions.id,
                     UserCompanions.mainUserId,
@@ -135,8 +140,7 @@ class CompanionRepository {
                 )
                 .where {
                     (UserCompanions.companionUserId eq companionUserId) and
-                    (UserCompanions.status eq "PENDING") and
-                    (Users.id eq UserCompanions.mainUserId)
+                    (UserCompanions.status eq "PENDING")
                 }
                 .orderBy(UserCompanions.createdAt, SortOrder.DESC)
                 .map { row ->
