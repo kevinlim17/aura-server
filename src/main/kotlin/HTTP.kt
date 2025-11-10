@@ -3,6 +3,7 @@ package com.kevin
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.kborowy.authprovider.firebase.firebase
+import com.kevin.routes.util.installRequestLogger
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
@@ -23,4 +24,7 @@ fun Application.configureHTTP() {
     install(ContentNegotiation) {
         json()
     }
+
+    // Install application-wide HTTP request/response logger
+    installRequestLogger()
 }
