@@ -383,8 +383,11 @@ object VoiceRecordings : IntIdTable("voice_recordings") {
 }
 
 // ============================================================================
-// 12. FEW-SHOT EXAMPLES TABLE
+// 12. FEW-SHOT EXAMPLES TABLE (Legacy - use FewShotExamplesTable for new code)
 // ============================================================================
+// NOTE: This table definition is kept for backward compatibility.
+// New code should use com.kevin.database.extraTables.FewShotExamplesTable
+// which includes the extended fields from V2 migration.
 object FewShotExamples : IntIdTable("few_shot_examples") {
     // Few-shot example information
     val artworkId = reference("artwork_id", Artworks)

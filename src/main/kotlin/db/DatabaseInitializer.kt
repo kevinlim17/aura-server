@@ -1,11 +1,14 @@
 package com.kevin.db
 
+import com.kevin.db.extraTables.FewShotExampleResourcesTable
+import com.kevin.db.extraTables.FewShotExamplesTable
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
+import java.io.File
 
 /**
  * Database initialization and migration utilities
- * Handle table creation, seeding, and cleanup for 14 tables
+ * Handle table creation, seeding, and cleanup for 14+ tables
  */
 object DatabaseInitializer {
 
@@ -16,6 +19,7 @@ object DatabaseInitializer {
     fun initializeTables(database: Database) {
         transaction(database) {
             // Create tables in the correct order (respecting foreign key constraints)
+            // Note: FewShotExamples is created by migrations to support schema evolution
             SchemaUtils.create(
                 Users,
                 UserProfiles,
@@ -28,10 +32,126 @@ object DatabaseInitializer {
                 UserLinks,
                 UserMemos,
                 VoiceRecordings,
-                FewShotExamples,
+                // FewShotExamples, // Handled by migrations (V2)
                 UserCompanions,
                 SchemaMigrations
             )
+        }
+
+        // Disable Korean text search trigger after table creation (not needed, we use LIKE search)
+        disableTextSearchTrigger(database)
+
+        // Run migrations (this creates FewShotExamplesTable with all extensions)
+        runMigrations(database)
+    }
+
+    /**
+     * Run SQL migrations from src/main/resources/db/migration
+     * Migrations are executed in order based on version number
+     */
+    fun runMigrations(database: Database) {
+        val migrationsPath = "src/main/resources/db/migration"
+        val migrationsDir = File(migrationsPath)
+
+        if (!migrationsDir.exists() || !migrationsDir.isDirectory) {
+            println("⚠ Migrations directory not found: $migrationsPath")
+            return
+        }
+
+        // Get all SQL migration files sorted by version
+        val migrationFiles = migrationsDir.listFiles { file ->
+            file.isFile && file.extension == "sql" && file.name.matches(Regex("V\\d+__.+\\.sql"))
+        }?.sortedBy { it.name } ?: emptyList()
+
+        if (migrationFiles.isEmpty()) {
+            println("✓ No migrations to run")
+            return
+        }
+
+        transaction(database) {
+            migrationFiles.forEach { file ->
+                val version = file.nameWithoutExtension
+
+                // Check if migration already applied
+                val alreadyApplied = SchemaMigrations
+                    .selectAll()
+                    .where { SchemaMigrations.version eq version }
+                    .count() > 0
+
+                if (alreadyApplied) {
+                    println("⊘ Migration already applied: $version")
+                    return@forEach
+                }
+
+                try {
+                    println("→ Running migration: $version")
+                    val sql = file.readText()
+
+                    // Split by semicolon and execute each statement
+                    sql.split(";")
+                        .map { it.trim() }
+                        .filter { statement ->
+                            // Remove comment lines but keep SQL statements that have comments
+                            val hasSQL = statement.lines().any { line ->
+                                val trimmed = line.trim()
+                                trimmed.isNotEmpty() && !trimmed.startsWith("--")
+                            }
+                            hasSQL
+                        }
+                        .forEach { statement ->
+                            if (statement.isNotBlank()) {
+                                exec(statement)
+                            }
+                        }
+
+                    // Record migration completion (if the migration file didn't do it itself)
+                    val exists = SchemaMigrations
+                        .selectAll()
+                        .where { SchemaMigrations.version eq version }
+                        .count() > 0
+
+                    if (!exists) {
+                        SchemaMigrations.insert {
+                            it[SchemaMigrations.version] = version
+                            it[description] = "Executed from file: ${file.name}"
+                        }
+                    }
+
+                    println("✓ Migration completed: $version")
+                } catch (e: Exception) {
+                    println("✗ Migration failed: $version - ${e.message}")
+                    throw e
+                }
+            }
+        }
+
+        // Note: FewShotExamplesTable and FewShotExampleResourcesTable are created by migrations
+        // No need to create them again here
+    }
+
+    /**
+     * Disable the artworks_search_vector_update trigger
+     * This trigger uses 'korean' text search configuration which may not be available
+     * We use LIKE-based search instead, so this trigger is not needed
+     */
+    fun disableTextSearchTrigger(database: Database) {
+        transaction(database) {
+            try {
+                // Drop the trigger if it exists
+                exec("""
+                    DROP TRIGGER IF EXISTS artworks_search_vector_trigger ON artworks;
+                """.trimIndent())
+
+                // Drop the function if it exists
+                exec("""
+                    DROP FUNCTION IF EXISTS artworks_search_vector_update();
+                """.trimIndent())
+
+                println("✓ Disabled artworks_search_vector_update trigger (not needed for LIKE search)")
+            } catch (e: Exception) {
+                println("⚠ Failed to disable search vector trigger: ${e.message}")
+                // Not critical, continue anyway
+            }
         }
     }
 
@@ -41,11 +161,19 @@ object DatabaseInitializer {
      */
     fun dropAllTables(database: Database) {
         transaction(database) {
+            // Drop extra tables first
+            try {
+                SchemaUtils.drop(FewShotExampleResourcesTable)
+                SchemaUtils.drop(FewShotExamplesTable)
+            } catch (e: Exception) {
+                println("⚠ Could not drop few-shot tables: ${e.message}")
+            }
+
             // Drop in reverse order of dependencies
             SchemaUtils.drop(
                 SchemaMigrations,
                 UserCompanions,
-                FewShotExamples,
+                // FewShotExamples, // Handled above as FewShotExamplesTable
                 VoiceRecordings,
                 UserMemos,
                 UserLinks,
@@ -244,8 +372,8 @@ object DatabaseInitializer {
                 it[processingStatus] = "COMPLETED"
             }
 
-            // Create few-shot example
-            FewShotExamples.insert {
+            // Create few-shot example (using FewShotExamplesTable from extraTables)
+            FewShotExamplesTable.insert {
                 it[artworkId] = artwork1Id
                 it[userContextSummary] = "폭풍우와 바다 경험이 있는 시각장애인"
                 it[exemplarText] = "상상해보세요. 밤하늘이 마치 살아있는 것처럼 소용돌이치고 있습니다..."
@@ -360,7 +488,8 @@ object DatabaseInitializer {
             // Delete it in reverse order of dependencies
             SchemaMigrations.deleteAll()
             UserCompanions.deleteAll()
-            FewShotExamples.deleteAll()
+            FewShotExampleResourcesTable.deleteAll()
+            FewShotExamplesTable.deleteAll()
             VoiceRecordings.deleteAll()
             UserMemos.deleteAll()
             UserLinks.deleteAll()
