@@ -5,7 +5,6 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -17,7 +16,7 @@ import kotlin.test.assertTrue
  * 3-5. 사용자 프로필/컨텍스트/선호도 설정
  * 6-7. 작품 검색 및 조회
  * 8-11. 도슨트 생성 및 재생
- * 12. 피드백 제출 및 조회
+ * 12. 피드백 제출 및 조회, Few-Shot 자동 생성 확인
  * 13. 링크 관리 (추가/조회/삭제)
  * 14. 메모 관리 (생성/조회/수정/통계/삭제)
  * 15. 동행자 관리 (초대/수락/권한/통계/초대코드)
@@ -241,9 +240,7 @@ class AuraIntegrationTest {
         // If results came from Gemini, verify they were cached to DB
         if (isFromGemini) {
             println("\n=== Step 6-2: DB 캐싱 검증 (두 번째 검색) ===")
-            runBlocking {
-                delay(1000) // Wait for DB write to complete
-            }
+            delay(1000) // Wait for DB write to complete
 
             val secondSearchResponse = client.post("/api/artworks/search") {
                 contentType(ContentType.Application.Json)
@@ -329,49 +326,52 @@ class AuraIntegrationTest {
         // ========================================
         println("\n=== Step 9: 도슨트 생성 상태 확인 (폴링) ===")
         var docentCompleted = false
-        var attempts = 0
-        val maxAttempts = 30 // 최대 30초 대기
+        val maxAttempts = 45 // 최대 45초 대기 (1분 미만)
 
-        runBlocking {
-            while (!docentCompleted && attempts < maxAttempts) {
-                delay(1000) // 1초 대기
-                attempts++
+        for (attempts in 1..maxAttempts) {
+            delay(1000) // 1초 대기
 
-                val statusResponse = client.get("/api/docent/sessions/$docentSessionId")
+            val statusResponse = client.get("/api/docent/sessions/$docentSessionId")
 
-                if (statusResponse.status == HttpStatusCode.OK) {
-                    val statusBody = statusResponse.bodyAsText()
-                    val status = extractJsonString(statusBody, "status")
-                    val progress = extractJsonInt(statusBody, "progress")
+            if (statusResponse.status == HttpStatusCode.OK) {
+                val statusBody = statusResponse.bodyAsText()
+                val status = extractJsonString(statusBody, "status")
+                val progress = extractJsonInt(statusBody, "progress")
 
-                    println("  [${attempts}s] Status: $status, Progress: $progress%")
+                // Progress indicator
+                print(".")
+                if (attempts % 10 == 0) {
+                    println(" [${attempts}s] Status: $status, Progress: $progress%")
+                }
 
-                    when (status) {
-                        "COMPLETED" -> {
-                            docentCompleted = true
-                            println("✓ 도슨트 생성 완료!")
+                when (status) {
+                    "COMPLETED" -> {
+                        docentCompleted = true
+                        println("\n✓ 도슨트 생성 완료! (${attempts}초)")
 
-                            // 생성된 텍스트 확인
-                            val generatedText = extractGeneratedText(statusBody)
-                            println("\n=== 생성된 도슨트 텍스트 ===")
-                            println(generatedText.take(1000) + "...")
-                            println("=========================\n")
-                        }
-                        "FAILED" -> {
-                            val errorMessage = extractJsonString(statusBody, "errorMessage")
-                            println("✗ 도슨트 생성 실패: $errorMessage")
-                            break
-                        }
-                        "GENERATING" -> {
-                            // 계속 대기
-                        }
+                        // 생성된 텍스트 확인
+                        val generatedText = extractGeneratedText(statusBody)
+                        println("\n=== 생성된 도슨트 텍스트 ===")
+                        println(generatedText.take(200) + "...")
+                        println("=========================\n")
+                        break
+                    }
+                    "FAILED" -> {
+                        val errorMessage = extractJsonString(statusBody, "errorMessage")
+                        println("\n✗ 도슨트 생성 실패: $errorMessage")
+                        break
+                    }
+                    "GENERATING" -> {
+                        // 계속 대기
                     }
                 }
             }
         }
 
         if (!docentCompleted) {
-            println("⚠ 도슨트 생성 타임아웃 (${maxAttempts}초 초과)")
+            println("\n⚠ 도슨트 생성 타임아웃 (${maxAttempts}초 초과)")
+            println("  참고: 실제 Gemini API 호출 시 지연이 발생할 수 있습니다")
+            println("  나머지 테스트는 도슨트 생성이 필요하지 않은 항목만 실행합니다")
         }
 
         // ========================================
@@ -462,6 +462,66 @@ class AuraIntegrationTest {
                 val comment = extractJsonString(feedbackBody, "comment")
                 println("  - 코멘트: ${comment.take(50)}...")
             }
+
+            // 12-3. Few-Shot 자동 생성 확인
+            println("\n12-3. Few-Shot 자동 생성 확인 (고품질 피드백 후)")
+            println("  ℹ️  고품질 피드백(>= 4.0) 제출 시 자동으로 Few-Shot 예시가 생성됩니다")
+
+            // 비동기 처리 대기
+            delay(2000)
+
+            val userFewShotsResponse = client.get("/api/fewshot/user/$userId?limit=10&minQuality=4.0") {
+                header("Authorization", "Bearer $token")
+            }
+
+            if (userFewShotsResponse.status == HttpStatusCode.OK) {
+                val fewShotsBody = userFewShotsResponse.bodyAsText()
+                println("✓ 사용자 Few-Shot 예시 조회 성공")
+
+                val hasFewShots = fewShotsBody.contains("\"data\":[") &&
+                                 !fewShotsBody.contains("\"data\":[]")
+
+                if (hasFewShots) {
+                    val fewShotId = extractJsonInt(fewShotsBody, "id")
+                    println("  - Few-Shot ID: $fewShotId (자동 생성됨)")
+                    println("  - 고품질 피드백으로부터 학습 예시가 생성되었습니다")
+
+                    // Few-Shot 상세 조회
+                    println("\n12-4. Few-Shot 상세 조회 (enriched)")
+                    val fewShotDetailResponse = client.get("/api/fewshot/$fewShotId") {
+                        header("Authorization", "Bearer $token")
+                    }
+
+                    if (fewShotDetailResponse.status == HttpStatusCode.OK) {
+                        println("✓ Few-Shot 상세 조회 성공")
+                        val detailBody = fewShotDetailResponse.bodyAsText()
+                        val qualityScore = extractJsonDouble(detailBody, "qualityScore")
+                        println("  - 품질 점수: $qualityScore")
+                    }
+
+                    // Few-Shot 통계 조회
+                    println("\n12-5. Few-Shot 통계 조회")
+                    val fewShotStatsResponse = client.get("/api/fewshot/statistics") {
+                        header("Authorization", "Bearer $token")
+                    }
+
+                    if (fewShotStatsResponse.status == HttpStatusCode.OK) {
+                        val statsBody = fewShotStatsResponse.bodyAsText()
+                        println("✓ Few-Shot 통계 조회 성공")
+
+                        val totalExamples = extractJsonInt(statsBody, "totalExamples")
+                        val activeExamples = extractJsonInt(statsBody, "activeExamples")
+                        val cacheHitRate = extractJsonDouble(statsBody, "cacheHitRate")
+
+                        println("  - 전체 Few-Shot 예시: $totalExamples")
+                        println("  - 활성 Few-Shot 예시: $activeExamples")
+                        println("  - 캐시 히트율: ${String.format("%.1f", cacheHitRate)}%")
+                    }
+                } else {
+                    println("  ⚠ Few-Shot이 아직 생성되지 않았거나 품질 기준을 충족하지 못함")
+                    println("     (비동기 처리 중이거나 만족도 < 4.0)")
+                }
+            }
         }
 
         // ========================================
@@ -537,7 +597,7 @@ class AuraIntegrationTest {
                 {
                     "content": "이 작품을 보면서 할머니와 밤하늘을 보던 기억이 떠올랐다. 별들이 반짝이던 그 순간의 따뜻함이 느껴진다.",
                     "artworkId": $artworkId,
-                    "docentSessionId": $docentSessionId,
+                    "docentSessionId": ${if (docentCompleted) docentSessionId else "null"},
                     "inputMethod": "TEXT",
                     "tags": ["추억", "감동", "할머니", "별"],
                     "category": "THOUGHT",
@@ -805,6 +865,9 @@ class AuraIntegrationTest {
 
         println("\n" + "=".repeat(50))
         println("통합 테스트 완료!")
+        if (!docentCompleted) {
+            println("⚠ 도슨트 생성 타임아웃으로 일부 테스트 스킵됨")
+        }
         println("=".repeat(50))
     }
 
