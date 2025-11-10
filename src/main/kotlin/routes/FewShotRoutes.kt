@@ -73,10 +73,10 @@ fun Route.fewShotRoutes() {
 
                 call.respond(
                     HttpStatusCode.OK,
-                    mapOf(
-                        "success" to true,
-                        "data" to userFewShots,
-                        "message" to "Few-shot examples retrieved successfully"
+                    com.kevin.model.dto.FewShotApiResponse(
+                        success = true,
+                        data = userFewShots,
+                        message = "Few-shot examples retrieved successfully"
                     )
                 )
             } catch (e: Exception) {
@@ -103,10 +103,10 @@ fun Route.fewShotRoutes() {
 
                 call.respond(
                     HttpStatusCode.OK,
-                    mapOf(
-                        "success" to true,
-                        "data" to enriched,
-                        "message" to "Few-shot detail retrieved successfully"
+                    com.kevin.model.dto.FewShotApiResponse(
+                        success = true,
+                        data = enriched,
+                        message = "Few-shot detail retrieved successfully"
                     )
                 )
             } catch (e: Exception) {
@@ -135,13 +135,13 @@ fun Route.fewShotRoutes() {
 
                 call.respond(
                     HttpStatusCode.OK,
-                    mapOf(
-                        "success" to true,
-                        "data" to mapOf(
-                            "userStats" to userStats,
-                            "cacheStats" to cacheStats
+                    com.kevin.model.dto.FewShotApiResponse(
+                        success = true,
+                        data = com.kevin.model.dto.FewShotStatisticsResponse(
+                            userStats = userStats,
+                            cacheStats = cacheStats
                         ),
-                        "message" to "Statistics retrieved successfully"
+                        message = "Statistics retrieved successfully"
                     )
                 )
             } catch (e: Exception) {
@@ -178,9 +178,10 @@ fun Route.fewShotRoutes() {
 
                 call.respond(
                     HttpStatusCode.OK,
-                    mapOf(
-                        "success" to true,
-                        "message" to "Few-shot deactivated successfully"
+                    com.kevin.model.dto.FewShotApiResponse(
+                        success = true,
+                        data = mapOf("fewShotId" to fewShotId),
+                        message = "Few-shot deactivated successfully"
                     )
                 )
             } catch (e: Exception) {
@@ -214,10 +215,12 @@ fun Route.fewShotRoutes() {
 
                 call.respond(
                     HttpStatusCode.OK,
-                    mapOf(
-                        "success" to true,
-                        "data" to mapOf("deletedCacheKeys" to deletedCount),
-                        "message" to "Cache invalidated successfully"
+                    com.kevin.model.dto.FewShotApiResponse(
+                        success = true,
+                        data = com.kevin.model.dto.CacheInvalidationResponse(
+                            deletedCacheKeys = deletedCount
+                        ),
+                        message = "Cache invalidated successfully"
                     )
                 )
             } catch (e: Exception) {
@@ -254,9 +257,10 @@ fun Route.fewShotRoutes() {
 
                 call.respond(
                     HttpStatusCode.Accepted,
-                    mapOf(
-                        "success" to true,
-                        "message" to "Quality recalculation started in background"
+                    com.kevin.model.dto.FewShotApiResponse(
+                        success = true,
+                        data = mapOf("status" to "started"),
+                        message = "Quality recalculation started in background"
                     )
                 )
             } catch (e: Exception) {
@@ -286,13 +290,13 @@ fun Route.fewShotRoutes() {
 
                 call.respond(
                     HttpStatusCode.OK,
-                    mapOf(
-                        "success" to true,
-                        "data" to mapOf(
-                            "deletedCount" to deletedCount,
-                            "minQuality" to minQuality
+                    com.kevin.model.dto.FewShotApiResponse(
+                        success = true,
+                        data = com.kevin.model.dto.CleanupResponse(
+                            deletedCount = deletedCount,
+                            minQuality = minQuality
                         ),
-                        "message" to "Low-quality few-shots cleaned up successfully"
+                        message = "Low-quality few-shots cleaned up successfully"
                     )
                 )
             } catch (e: Exception) {

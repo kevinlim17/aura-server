@@ -63,14 +63,11 @@ class FeedbackService(
         }
 
         // Check if session exists
-        val session = docentRepository.findSessionById(sessionId)
-        if (session == null) {
-            return ApiResponse(
-                success = false,
-                data = null,
-                message = "Docent session not found"
-            )
-        }
+        val session = docentRepository.findSessionById(sessionId) ?: return ApiResponse(
+            success = false,
+            data = null,
+            message = "Docent session not found"
+        )
 
         // Check if feedback already exists for this session
         val existingFeedback = feedbackRepository.findFeedbackBySessionId(sessionId)

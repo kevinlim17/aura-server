@@ -72,7 +72,7 @@ class FewShotBuilderService(
             userMemoIds = userMemoIds,
             companionInput = companionInput,
             promptMetadata = promptMetadata,
-            qualityScore = qualityScore ?: 4.0,
+            qualityScore = qualityScore,
             effectivenessScore = effectivenessScore,
             diversityScore = diversityScore,
             category = category ?: inferCategory(session)
@@ -403,7 +403,7 @@ class FewShotBuilderService(
     /**
      * Get user-specific few-shot statistics
      */
-    fun getUserFewShotStatistics(userId: Int): Map<String, Any> {
+    fun getUserFewShotStatistics(userId: Int): UserFewShotStatistics {
         val userFewShots = fewShotRepository.findFewShotsByUserId(userId, limit = 1000, minQualityScore = 0.0)
 
         val totalCount = userFewShots.size
@@ -424,13 +424,13 @@ class FewShotBuilderService(
             .groupBy { it.category ?: "UNCATEGORIZED" }
             .mapValues { it.value.size }
 
-        return mapOf(
-            "totalExamples" to totalCount,
-            "activeExamples" to activeCount,
-            "averageQualityScore" to avgQuality,
-            "averageEffectivenessScore" to avgEffectiveness,
-            "totalUsageCount" to totalUsage,
-            "examplesByCategory" to byCategory
+        return UserFewShotStatistics(
+            totalExamples = totalCount,
+            activeExamples = activeCount,
+            averageQualityScore = avgQuality,
+            averageEffectivenessScore = avgEffectiveness,
+            totalUsageCount = totalUsage,
+            examplesByCategory = byCategory
         )
     }
 

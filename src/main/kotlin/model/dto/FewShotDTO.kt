@@ -192,6 +192,65 @@ data class TopUsedFewShot(
 )
 
 // ============================================================================
+// User Few-Shot Statistics DTO
+// ============================================================================
+
+/**
+ * User-specific few-shot statistics
+ * Replaces Map<String, Any> to enable kotlinx.serialization
+ */
+@Serializable
+data class UserFewShotStatistics(
+    val totalExamples: Int,
+    val activeExamples: Int,
+    val averageQualityScore: Double,
+    val averageEffectivenessScore: Double,
+    val totalUsageCount: Int,
+    val examplesByCategory: Map<String, Int>
+)
+
+// ============================================================================
+// API Response Wrappers
+// ============================================================================
+
+/**
+ * Generic API response wrapper for Few-Shot endpoints
+ * Enables kotlinx.serialization for heterogeneous responses
+ */
+@Serializable
+data class FewShotApiResponse<T>(
+    val success: Boolean,
+    val data: T,
+    val message: String
+)
+
+/**
+ * Statistics response combining user and cache stats
+ */
+@Serializable
+data class FewShotStatisticsResponse(
+    val userStats: UserFewShotStatistics,
+    val cacheStats: FewShotCacheStats
+)
+
+/**
+ * Cache invalidation response
+ */
+@Serializable
+data class CacheInvalidationResponse(
+    val deletedCacheKeys: Int
+)
+
+/**
+ * Cleanup response
+ */
+@Serializable
+data class CleanupResponse(
+    val deletedCount: Int,
+    val minQuality: Double
+)
+
+// ============================================================================
 // Few-Shot Selection DTOs
 // ============================================================================
 
