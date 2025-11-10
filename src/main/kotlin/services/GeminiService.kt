@@ -157,7 +157,7 @@ class GeminiService {
 
             return GenerationResponse(
                 text = text.trim(),
-                finishReason = geminiResponse.candidates?.firstOrNull()?.finishReason
+                finishReason = geminiResponse.candidates.firstOrNull()?.finishReason
             )
         } catch (e: Exception) {
             throw Exception("Failed to parse Gemini response: ${e.message}")
